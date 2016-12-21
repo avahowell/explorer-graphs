@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -10,12 +9,15 @@ import (
 	"github.com/NebulousLabs/Sia/modules"
 	"github.com/NebulousLabs/Sia/types"
 	"github.com/NebulousLabs/bolt"
+	"github.com/wcharczuk/go-chart"
+	"github.com/wcharczuk/go-chart/drawing"
 )
 
 const explorerdb = "explorer.db"
 
 var (
 	bucketBlockFacts = []byte("BlockFacts")
+	siaColor         = drawing.Color{47, 230, 55, 255}
 )
 
 type blockFacts struct {
@@ -53,48 +55,63 @@ func main() {
 	blockfacts := getBlockFacts(db)
 	binSize := 1008
 
-	var bins []types.Currency
+	var bins []float64
+	var xaxis []float64
 	bin := types.NewCurrency64(0)
 	i := 0
+	bincount := 0
 	for _, fact := range blockfacts[:len(blockfacts)-binSize] {
 		bin = bin.Add(fact.ActiveContractCost)
 		if i == binSize {
-			bins = append(bins, bin.Div64(uint64(binSize)))
+			binint, err := bin.Div64(uint64(binSize)).Div(types.SiacoinPrecision).Uint64()
+			if err != nil {
+				log.Fatal(err)
+			}
+			bins = append(bins, float64(binint))
+			xaxis = append(xaxis, float64(bincount))
 			bin = types.NewCurrency64(0)
 			i = 0
+			bincount++
 		} else {
 			i++
 		}
 	}
 
-	// convert bins to SC
-	for i, bin := range bins {
-		bins[i] = bin.Div(types.SiacoinPrecision)
-	}
-
-	// create our `data` javascript
-	bytes, err := json.Marshal(bins)
-	if err != nil {
-		log.Fatal(err)
-	}
-	bytes = append([]byte("var data = "), bytes...)
-
-	out, err := os.Create("data.json")
+	out, err := os.Create("data.png")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer out.Close()
 
-	_, err = out.Write(bytes)
+	graph := chart.Chart{
+		Title: "Active Contract Spending Over Time",
+		XAxis: chart.XAxis{
+			Name:      "Block Height (thousands)",
+			NameStyle: chart.StyleShow(),
+			Style:     chart.StyleShow(),
+		},
+		YAxis: chart.YAxis{
+			Name:      "Active Contract Spending (SC)",
+			NameStyle: chart.StyleShow(),
+			Style:     chart.StyleShow(),
+		},
+		Series: []chart.Series{
+			chart.ContinuousSeries{
+				XValues: xaxis,
+				YValues: bins,
+				Style: chart.Style{
+					Show:        true,
+					StrokeWidth: 3.0,
+					StrokeColor: siaColor,
+				},
+			},
+		},
+	}
+
+	err = graph.Render(chart.PNG, out)
 	if err != nil {
 		log.Fatal(err)
 	}
-	out.Close()
 
-	err = os.Rename("data.json", "frontend/data.js")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("graphs successfully generated, open frontend/index.html")
+	fmt.Println("chart.png generated")
 }
