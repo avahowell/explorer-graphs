@@ -17,7 +17,7 @@ const explorerdb = "explorer.db"
 
 var (
 	bucketBlockFacts = []byte("BlockFacts")
-	siaColor         = drawing.Color{47, 230, 55, 255}
+	siaColor         = drawing.Color{R: 47, B: 230, G: 55, A: 255}
 )
 
 type blockFacts struct {
@@ -58,11 +58,14 @@ func main() {
 	var bins []float64
 	var xaxis []float64
 	bin := types.NewCurrency64(0)
-	i := 0
 	bincount := 0
-	for _, fact := range blockfacts[:len(blockfacts)-binSize] {
+	j := 0
+
+	for i := len(blockfacts) - 1; i >= 0; i-- {
+		fact := blockfacts[i]
+
 		bin = bin.Add(fact.ActiveContractCost)
-		if i == binSize {
+		if j == binSize {
 			binint, err := bin.Div64(uint64(binSize)).Div(types.SiacoinPrecision).Uint64()
 			if err != nil {
 				log.Fatal(err)
@@ -70,10 +73,10 @@ func main() {
 			bins = append(bins, float64(binint))
 			xaxis = append(xaxis, float64(bincount))
 			bin = types.NewCurrency64(0)
-			i = 0
+			j = 0
 			bincount++
 		} else {
-			i++
+			j++
 		}
 	}
 
@@ -85,6 +88,19 @@ func main() {
 
 	graph := chart.Chart{
 		Title: "Active Contract Spending Over Time",
+		TitleStyle: chart.Style{
+			Show: true,
+		},
+		Width:  800,
+		Height: 500,
+		Background: chart.Style{
+			Padding: chart.Box{
+				Top:    100,
+				Left:   5,
+				Right:  5,
+				Bottom: 5,
+			},
+		},
 		XAxis: chart.XAxis{
 			Name:      "Block Height (thousands)",
 			NameStyle: chart.StyleShow(),
