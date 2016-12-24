@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -13,11 +14,11 @@ import (
 	"github.com/wcharczuk/go-chart/drawing"
 )
 
-const explorerdb = "explorer.db"
-
 var (
 	bucketBlockFacts = []byte("BlockFacts")
 	siaColor         = drawing.Color{R: 47, B: 230, G: 55, A: 255}
+
+	explorerdb = flag.String("db", "explorer.db", "path to the Sia explorer bolt database")
 )
 
 type blockFacts struct {
@@ -46,7 +47,9 @@ func getBlockFacts(db *bolt.DB) []blockFacts {
 }
 
 func main() {
-	db, err := bolt.Open(explorerdb, 0600, nil)
+	flag.Parse()
+
+	db, err := bolt.Open(*explorerdb, 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
