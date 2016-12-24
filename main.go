@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 
@@ -16,9 +15,10 @@ import (
 
 var (
 	bucketBlockFacts = []byte("BlockFacts")
-	siaColor         = drawing.Color{R: 47, B: 230, G: 55, A: 255}
+	siaColor         = drawing.Color{R: 47, G: 230, B: 55, A: 255}
 
 	explorerdb = flag.String("db", "explorer.db", "path to the Sia explorer bolt database")
+	outpath    = flag.String("out", "out.png", "save path for the generated graph")
 )
 
 type blockFacts struct {
@@ -27,13 +27,17 @@ type blockFacts struct {
 	Timestamp types.Timestamp
 }
 
-func getBlockFacts(db *bolt.DB) []blockFacts {
+// getBlockFacts walks through the explorer database and returns a slice of
+// blockFacts, where blockfacts[0] is the blockFacts for the first block on the
+// blockchain, and blockfacts[len(blockfacts)-1] is the blockFacts for the last
+// block on the blockchain.
+func getBlockFacts(db *bolt.DB) ([]blockFacts, error) {
 	var blockfacts []blockFacts
-	db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketBlockFacts)
 		c := b.Cursor()
 
-		for k, blockfactbytes := c.First(); k != nil; k, blockfactbytes = c.Next() {
+		for k, blockfactbytes := c.Last(); k != nil; k, blockfactbytes = c.Prev() {
 			var bf blockFacts
 			err := encoding.Unmarshal(blockfactbytes, &bf)
 			if err != nil {
@@ -43,53 +47,40 @@ func getBlockFacts(db *bolt.DB) []blockFacts {
 		}
 		return nil
 	})
-	return blockfacts
+	return blockfacts, err
 }
 
-func main() {
-	flag.Parse()
-
-	db, err := bolt.Open(*explorerdb, 0600, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
-	blockfacts := getBlockFacts(db)
+// activeContractGraph creates a go-chart graph of active contract spending
+// given a slice of block facts.
+func activeContractGraph(bf []blockFacts) (*chart.Chart, error) {
+	// use a bin size of 1008, or 1 block-week.
 	binSize := 1008
 
-	var bins []float64
+	var yaxis []float64
 	var xaxis []float64
 	bin := types.NewCurrency64(0)
-	bincount := 0
-	j := 0
 
-	for i := len(blockfacts) - 1; i >= 0; i-- {
-		fact := blockfacts[i]
+	j := 0
+	for i := 0; i < len(bf); i++ {
+		fact := bf[i]
 
 		bin = bin.Add(fact.ActiveContractCost)
 		if j == binSize {
 			binint, err := bin.Div64(uint64(binSize)).Div(types.SiacoinPrecision).Uint64()
 			if err != nil {
-				log.Fatal(err)
+				return nil, err
 			}
-			bins = append(bins, float64(binint))
-			xaxis = append(xaxis, float64(bincount))
+
+			yaxis = append(yaxis, float64(binint))
+			xaxis = append(xaxis, float64(len(yaxis)))
 			bin = types.NewCurrency64(0)
 			j = 0
-			bincount++
 		} else {
 			j++
 		}
 	}
 
-	out, err := os.Create("data.png")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer out.Close()
-
-	graph := chart.Chart{
+	return &chart.Chart{
 		Title: "Active Contract Spending Over Time",
 		TitleStyle: chart.Style{
 			Show: true,
@@ -110,14 +101,14 @@ func main() {
 			Style:     chart.StyleShow(),
 		},
 		YAxis: chart.YAxis{
-			Name:      "Active Contract Spending (SC)",
+			Name:      "Active Contract Spending (Million SC)",
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
 		},
 		Series: []chart.Series{
 			chart.ContinuousSeries{
 				XValues: xaxis,
-				YValues: bins,
+				YValues: yaxis,
 				Style: chart.Style{
 					Show:        true,
 					StrokeWidth: 3.0,
@@ -125,12 +116,38 @@ func main() {
 				},
 			},
 		},
+	}, nil
+}
+
+func main() {
+	flag.Parse()
+
+	db, err := bolt.Open(*explorerdb, 0600, nil)
+	if err != nil {
+		log.Fatal(err)
 	}
+	defer db.Close()
+
+	blockfacts, err := getBlockFacts(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	graph, err := activeContractGraph(blockfacts)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out, err := os.Create(*outpath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer out.Close()
 
 	err = graph.Render(chart.PNG, out)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("chart.png generated")
+	log.Printf("rendered graph from %v to %v\n", *explorerdb, *outpath)
 }
