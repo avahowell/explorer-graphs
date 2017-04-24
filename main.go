@@ -110,6 +110,12 @@ func (bf factSlice) Graph(params graphParams) (*chart.Chart, error) {
 			Name:      "Block Height",
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
+			Ticks: []chart.Tick{
+				{0.0, "0"},
+				{50000.0, "50k"},
+				{100000.0, "100k"},
+				{xaxis[len(xaxis)-1], ""},
+			},
 		},
 		YAxis: chart.YAxis{
 			Name:      params.ylabel,
