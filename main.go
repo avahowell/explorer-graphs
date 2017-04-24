@@ -2,9 +2,9 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/NebulousLabs/Sia/encoding"
 	"github.com/NebulousLabs/Sia/modules"
@@ -50,7 +50,7 @@ type (
 // blockchain, and blockfacts[len(blockfacts)-1] is the blockFacts for the last
 // block on the blockchain.
 func getBlockFacts(db *bolt.DB) (factSlice, error) {
-	var blockfacts []blockFacts
+	var blockfacts factSlice
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketBlockFacts)
 		c := b.Cursor()
@@ -65,8 +65,15 @@ func getBlockFacts(db *bolt.DB) (factSlice, error) {
 		}
 		return nil
 	})
+
+	sort.Sort(blockfacts)
+
 	return blockfacts, err
 }
+
+func (bf factSlice) Len() int           { return len(bf) }
+func (bf factSlice) Less(i, j int) bool { return bf[i].Height < bf[j].Height }
+func (bf factSlice) Swap(i, j int)      { bf[i], bf[j] = bf[j], bf[i] }
 
 // Graph graphs block fact data received by the provded factGetter and returns
 // a chart labelled acording to the `title` and `ylabel`.
