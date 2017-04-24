@@ -27,11 +27,14 @@ type blockFacts struct {
 	Timestamp types.Timestamp
 }
 
+type factSlice []blockFacts
+type factGetter func(bf blockFacts) types.Currency
+
 // getBlockFacts walks through the explorer database and returns a slice of
 // blockFacts, where blockfacts[0] is the blockFacts for the first block on the
 // blockchain, and blockfacts[len(blockfacts)-1] is the blockFacts for the last
 // block on the blockchain.
-func getBlockFacts(db *bolt.DB) ([]blockFacts, error) {
+func getBlockFacts(db *bolt.DB) (factSlice, error) {
 	var blockfacts []blockFacts
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucketBlockFacts)
@@ -50,9 +53,9 @@ func getBlockFacts(db *bolt.DB) ([]blockFacts, error) {
 	return blockfacts, err
 }
 
-// activeContractGraph creates a go-chart graph of active contract spending
-// given a slice of block facts.
-func activeContractGraph(bf []blockFacts) (*chart.Chart, error) {
+// Graph graphs block fact data received by the provded factGetter and returns
+// a chart labelled acording to the `title` and `ylabel`.
+func (bf factSlice) Graph(fg factGetter, title string, ylabel string) (*chart.Chart, error) {
 	// use a bin size of 1008, or 1 block-week.
 	binSize := 1008
 
@@ -64,7 +67,7 @@ func activeContractGraph(bf []blockFacts) (*chart.Chart, error) {
 	for i := 0; i < len(bf); i++ {
 		fact := bf[i]
 
-		bin = bin.Add(fact.ActiveContractCost)
+		bin = bin.Add(fg(fact))
 		if j == binSize {
 			binint, err := bin.Div64(uint64(binSize)).Div(types.SiacoinPrecision).Uint64()
 			if err != nil {
@@ -81,7 +84,7 @@ func activeContractGraph(bf []blockFacts) (*chart.Chart, error) {
 	}
 
 	return &chart.Chart{
-		Title: "Active Contract Spending Over Time",
+		Title: title,
 		TitleStyle: chart.Style{
 			Show: true,
 		},
@@ -96,12 +99,12 @@ func activeContractGraph(bf []blockFacts) (*chart.Chart, error) {
 			},
 		},
 		XAxis: chart.XAxis{
-			Name:      "Block Height (thousands)",
+			Name:      "Block Height",
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
 		},
 		YAxis: chart.YAxis{
-			Name:      "Active Contract Spending (Million SC)",
+			Name:      ylabel,
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
 		},
@@ -133,7 +136,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	graph, err := activeContractGraph(blockfacts)
+	graph, err := blockfacts.Graph(func(bf blockFacts) types.Currency { return bf.ActiveContractCost }, "Active Contract Cost", "Contract Cost (SC)")
 	if err != nil {
 		log.Fatal(err)
 	}
