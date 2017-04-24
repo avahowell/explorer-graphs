@@ -26,6 +26,8 @@ var (
 		{func(bf blockFacts) types.Currency { return bf.ActiveContractCost.Div(types.SiacoinPrecision) }, "Active Contract Cost", "Contract Cost (SC)"},
 		{func(bf blockFacts) types.Currency { return bf.TotalContractCost.Div(types.SiacoinPrecision) }, "Total Contract Cost", "Total Contract Cost (SC)"},
 		{func(bf blockFacts) types.Currency { return bf.TotalContractSize.Div64(1e9) }, "Total Contract Size", "Total Contract Size (GB)"},
+		{func(bf blockFacts) types.Currency { return types.NewCurrency64(bf.TransactionCount) }, "Total Transaction Count", "Total Transactions"},
+		{func(bf blockFacts) types.Currency { return bf.Difficulty.Div64(1e12) }, "Difficulty", "Difficulty (TH)"},
 	}
 )
 
