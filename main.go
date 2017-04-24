@@ -19,7 +19,6 @@ var (
 	siaColor         = drawing.Color{R: 47, G: 230, B: 55, A: 255}
 
 	explorerdb = flag.String("db", "explorer.db", "path to the Sia explorer bolt database")
-	outpath    = flag.String("out", "out.png", "save path for the generated graph")
 )
 
 type (
