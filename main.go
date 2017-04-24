@@ -69,7 +69,7 @@ func (bf factSlice) Graph(fg factGetter, title string, ylabel string) (*chart.Ch
 
 		bin = bin.Add(fg(fact))
 		if j == binSize {
-			binint, err := bin.Div64(uint64(binSize)).Div(types.SiacoinPrecision).Uint64()
+			binint, err := bin.Div64(uint64(binSize)).Uint64()
 			if err != nil {
 				return nil, err
 			}
@@ -136,7 +136,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	graph, err := blockfacts.Graph(func(bf blockFacts) types.Currency { return bf.ActiveContractCost }, "Active Contract Cost", "Contract Cost (SC)")
+	graph, err := blockfacts.Graph(func(bf blockFacts) types.Currency { return bf.ActiveContractSize }, "Active Contract Cost", "Contract Cost (SC)")
 	if err != nil {
 		log.Fatal(err)
 	}
