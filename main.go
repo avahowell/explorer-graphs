@@ -20,15 +20,6 @@ var (
 
 	explorerdb = flag.String("db", "explorer.db", "path to the Sia explorer bolt database")
 	outpath    = flag.String("out", "out.png", "save path for the generated graph")
-
-	defaultGraphs = []graphParams{
-		{func(bf blockFacts) types.Currency { return bf.ActiveContractSize.Div64(1e9) }, "Active Contract Size", "Contract Size (GB)"},
-		{func(bf blockFacts) types.Currency { return bf.ActiveContractCost.Div(types.SiacoinPrecision) }, "Active Contract Cost", "Contract Cost (SC)"},
-		{func(bf blockFacts) types.Currency { return bf.TotalContractCost.Div(types.SiacoinPrecision) }, "Total Contract Cost", "Total Contract Cost (SC)"},
-		{func(bf blockFacts) types.Currency { return bf.TotalContractSize.Div64(1e9) }, "Total Contract Size", "Total Contract Size (GB)"},
-		{func(bf blockFacts) types.Currency { return types.NewCurrency64(bf.TransactionCount) }, "Total Transaction Count", "Total Transactions"},
-		{func(bf blockFacts) types.Currency { return bf.Difficulty.Div64(1e12) }, "Difficulty", "Difficulty (TH)"},
-	}
 )
 
 type (
@@ -152,13 +143,28 @@ func main() {
 		log.Fatal(err)
 	}
 
-	for _, param := range defaultGraphs {
-		graph, err := blockfacts.Graph(param)
+	lastTransactionCount := uint64(0)
+	graphs := []graphParams{
+		{func(bf blockFacts) types.Currency { return bf.ActiveContractSize.Div64(1e9) }, "Active Contract Size", "Contract Size (GB)"},
+		{func(bf blockFacts) types.Currency { return bf.ActiveContractCost.Div(types.SiacoinPrecision) }, "Active Contract Cost", "Contract Cost (SC)"},
+		{func(bf blockFacts) types.Currency { return bf.TotalContractCost.Div(types.SiacoinPrecision) }, "Total Contract Cost", "Total Contract Cost (SC)"},
+		{func(bf blockFacts) types.Currency { return bf.TotalContractSize.Div64(1e9) }, "Total Contract Size", "Total Contract Size (GB)"},
+		{func(bf blockFacts) types.Currency { return types.NewCurrency64(bf.TransactionCount) }, "Total Transaction Count", "Total Transactions"},
+		{func(bf blockFacts) types.Currency { return bf.Difficulty.Div64(1e12) }, "Difficulty", "Difficulty (TH)"},
+		{func(bf blockFacts) types.Currency {
+			txCount := bf.TransactionCount - lastTransactionCount
+			lastTransactionCount = bf.TransactionCount
+			return types.NewCurrency64(txCount)
+		}, "Transaction Count", "Transactions"},
+	}
+
+	for _, g := range graphs {
+		graph, err := blockfacts.Graph(g)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		savepath := param.title + ".png"
+		savepath := g.title + ".png"
 
 		out, err := os.Create(savepath)
 		if err != nil {
