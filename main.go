@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -70,31 +71,17 @@ func getBlockFacts(db *bolt.DB) (factSlice, error) {
 // Graph graphs block fact data received by the provded factGetter and returns
 // a chart labelled acording to the `title` and `ylabel`.
 func (bf factSlice) Graph(params graphParams) (*chart.Chart, error) {
-	// use a bin size of 1008, or 1 block-week.
-	binSize := 1008
-
 	var yaxis []float64
 	var xaxis []float64
-	bin := types.NewCurrency64(0)
 
-	j := 0
-	for i := 0; i < len(bf); i++ {
-		fact := bf[i]
-
-		bin = bin.Add(params.fg(fact))
-		if j == binSize {
-			binint, err := bin.Div64(uint64(binSize)).Uint64()
-			if err != nil {
-				return nil, err
-			}
-
-			yaxis = append(yaxis, float64(binint))
-			xaxis = append(xaxis, float64(len(yaxis)))
-			bin = types.NewCurrency64(0)
-			j = 0
-		} else {
-			j++
+	for i, fact := range bf {
+		val, err := params.fg(fact).Uint64()
+		if err != nil {
+			return nil, err
 		}
+
+		yaxis = append(yaxis, float64(val))
+		xaxis = append(xaxis, float64(i))
 	}
 
 	return &chart.Chart{
