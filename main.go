@@ -19,16 +19,30 @@ var (
 
 	explorerdb = flag.String("db", "explorer.db", "path to the Sia explorer bolt database")
 	outpath    = flag.String("out", "out.png", "save path for the generated graph")
+
+	defaultGraphs = []graphParams{
+		{func(bf blockFacts) types.Currency { return bf.ActiveContractSize.Div64(1e9) }, "Active Contract Size", "Contract Size (GB)"},
+		{func(bf blockFacts) types.Currency { return bf.ActiveContractCost.Div(types.SiacoinPrecision) }, "Active Contract Cost", "Contract Cost (SC)"},
+		{func(bf blockFacts) types.Currency { return bf.TotalContractCost.Div(types.SiacoinPrecision) }, "Total Contract Cost", "Total Contract Cost (SC)"},
+		{func(bf blockFacts) types.Currency { return bf.TotalContractSize.Div64(1e9) }, "Total Contract Size", "Total Contract Size (GB)"},
+	}
 )
 
-type blockFacts struct {
-	modules.BlockFacts
+type (
+	blockFacts struct {
+		modules.BlockFacts
 
-	Timestamp types.Timestamp
-}
+		Timestamp types.Timestamp
+	}
 
-type factSlice []blockFacts
-type factGetter func(bf blockFacts) types.Currency
+	factSlice   []blockFacts
+	factGetter  func(bf blockFacts) types.Currency
+	graphParams struct {
+		fg     factGetter
+		title  string
+		ylabel string
+	}
+)
 
 // getBlockFacts walks through the explorer database and returns a slice of
 // blockFacts, where blockfacts[0] is the blockFacts for the first block on the
@@ -55,7 +69,7 @@ func getBlockFacts(db *bolt.DB) (factSlice, error) {
 
 // Graph graphs block fact data received by the provded factGetter and returns
 // a chart labelled acording to the `title` and `ylabel`.
-func (bf factSlice) Graph(fg factGetter, title string, ylabel string) (*chart.Chart, error) {
+func (bf factSlice) Graph(params graphParams) (*chart.Chart, error) {
 	// use a bin size of 1008, or 1 block-week.
 	binSize := 1008
 
@@ -67,7 +81,7 @@ func (bf factSlice) Graph(fg factGetter, title string, ylabel string) (*chart.Ch
 	for i := 0; i < len(bf); i++ {
 		fact := bf[i]
 
-		bin = bin.Add(fg(fact))
+		bin = bin.Add(params.fg(fact))
 		if j == binSize {
 			binint, err := bin.Div64(uint64(binSize)).Uint64()
 			if err != nil {
@@ -84,7 +98,7 @@ func (bf factSlice) Graph(fg factGetter, title string, ylabel string) (*chart.Ch
 	}
 
 	return &chart.Chart{
-		Title: title,
+		Title: params.title,
 		TitleStyle: chart.Style{
 			Show: true,
 		},
@@ -104,7 +118,7 @@ func (bf factSlice) Graph(fg factGetter, title string, ylabel string) (*chart.Ch
 			Style:     chart.StyleShow(),
 		},
 		YAxis: chart.YAxis{
-			Name:      ylabel,
+			Name:      params.ylabel,
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
 		},
@@ -136,21 +150,25 @@ func main() {
 		log.Fatal(err)
 	}
 
-	graph, err := blockfacts.Graph(func(bf blockFacts) types.Currency { return bf.ActiveContractSize }, "Active Contract Cost", "Contract Cost (SC)")
-	if err != nil {
-		log.Fatal(err)
-	}
+	for _, param := range defaultGraphs {
+		graph, err := blockfacts.Graph(param)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	out, err := os.Create(*outpath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer out.Close()
+		savepath := param.title + ".png"
 
-	err = graph.Render(chart.PNG, out)
-	if err != nil {
-		log.Fatal(err)
-	}
+		out, err := os.Create(savepath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer out.Close()
 
-	log.Printf("rendered graph from %v to %v\n", *explorerdb, *outpath)
+		err = graph.Render(chart.PNG, out)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Printf("rendered graph from %v to %v\n", *explorerdb, savepath)
+	}
 }
